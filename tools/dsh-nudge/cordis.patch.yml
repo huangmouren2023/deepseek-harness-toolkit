@@ -1,0 +1,4 @@
+# dsh-nudge bundle patch: mounts the plugin into a profile layer stack.
+- insert:
+    - id: nudge
+      name: '@dsh-external/dsh-nudge'

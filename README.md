@@ -2,14 +2,19 @@
 
 作者：阿图
 
-这是一个面向 Windows 的 DeepSeek Harness 杂项工具箱，收录启动器、诊断脚本和其他临时救火包。工具按目录独立放置，后续可以继续增加互不干扰的小工具。
+这是一个面向 Windows 的 DeepSeek Harness 杂项工具箱，收录启动器、诊断脚本、插件和其他临时救火包。工具按目录独立放置，后续可以继续增加互不干扰的小工具。
 
 ## 工具目录
 
 ```text
 tools/
-└─ restart-web/
-   ├─ start-deepseek-harness-web.bat
+├─ restart-web/
+│  ├─ start-deepseek-harness-web.bat
+│  └─ README.md
+└─ dsh-nudge/
+   ├─ lib/index.js
+   ├─ package.json
+   ├─ cordis.patch.yml
    └─ README.md
 ```
 
@@ -38,3 +43,11 @@ tools\restart-web\start-deepseek-harness-web.bat
 脚本默认使用当前目录作为 Harness 根目录，因此也可以把它复制到 Harness 工作区后直接运行。
 
 前置条件：Windows、Node.js、pnpm，以及已经构建好的 `apps\web\dist\index.html`。
+
+## 第二个工具：dsh-nudge 插件
+
+`tools/dsh-nudge/` 是一个 DSH 插件：任务报错或中断时，强制戳 LLM 一下，让模型解释报错、从中断处继续，而不是装死躺平。针对 agent 稳定性的基础设施。
+
+它监听 `agent/request-error` waterfall：先放行给下游重试策略，只有终态失败（重试耗尽、无人接管）才接管，用 `agent.followup()` 唤醒模型。用户主动取消和 agent 销毁不戳；同 turn 只戳一次，连续失败上限 3 次。
+
+安装方式见 `tools/dsh-nudge/README.md`（放到 `~/.dsh/dsh-external/` 并在 profile 里 link，或手动建 junction）。
