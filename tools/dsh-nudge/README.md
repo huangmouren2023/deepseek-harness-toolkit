@@ -1,6 +1,10 @@
 # dsh-nudge
 
+[![dsh-plugin](https://img.shields.io/badge/dsh--plugin-%E2%9C%93-5B4CF0?style=flat-square)](https://github.com/topics/dsh-plugin)
+
 > 任务报错、中断时，强制戳 LLM 一下——让模型解释报错、从中断处继续，而不是装死躺平。针对 agent 稳定性问题的"基础设施级"插件。
+
+作者：小墨
 
 ## 为什么
 
