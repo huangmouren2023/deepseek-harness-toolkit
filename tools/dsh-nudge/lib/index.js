@@ -8,6 +8,17 @@
  * plugin steps in: it queues a follow-up user message so the model explains
  * the failure or resumes from the interruption instead of going silent.
  *
+ * Why not followup() directly in the waterfall: DSH's driver treats a
+ * terminal request error as the end of the activity — kick() swallows the
+ * LlmError, sets the phase idle, and only re-wakes when `wakeRequested` was
+ * latched (which happens only for aborts and maintenance, not for plain
+ * errors). A followup() issued while the driver is still running therefore
+ * parks the message in the inbox forever. This plugin defers the poke until
+ * the driver has converged to idle (observed through `agent/status`), then
+ * calls followup() — at which point wakeDriver() starts a fresh driver and
+ * the nudge message is processed. A short fallback timer covers the case
+ * where the idle transition is not observed.
+ *
  * Anti-loop guards: one nudge per turn, a consecutive-nudge cap per agent,
  * and no nudge at all for user-initiated cancellation or disposal.
  */
@@ -16,13 +27,20 @@ import { randomUUID } from 'node:crypto'
 
 export const name = '@dsh-external/dsh-nudge'
 
+/**
+ * Required service: the agents registry. Injecting it places this plugin's
+ * listeners on the shared agent context (the same plane llm-retry uses), so
+ * the agent-scoped `agent/request-error` and `agent/status` events actually
+ * reach this plugin. Without it the listeners register on a context that
+ * never sees scoped dispatch, and the plugin silently does nothing.
+ */
+export const inject = ['agents']
+
 /** Maximum consecutive terminal failures we keep nudging about. */
 const MAX_CONSECUTIVE_NUDGES = 3
 
-/**
- * Per-agent nudge state. Keyed by agent id for the lifetime of the plugin.
- * @typedef {{ turn: number | undefined, consecutive: number }} NudgeState
- */
+/** Fallback delay before forcing a pending poke when idle is not observed. */
+const POKE_FALLBACK_MS = 1500
 
 /**
  * Create an identified user message exactly like `createUserMessage` would,
@@ -79,8 +97,37 @@ function renderPrompt(failure, interrupted, cancelReason) {
 }
 
 export function apply(ctx) {
-  /** @type {Map<string, import('./index.js').NudgeState>} */
+  /** @type {Map<string, { turn: number | undefined, consecutive: number, pending: boolean, text: string, timer: ReturnType<typeof setTimeout> | undefined }>} */
   const states = new Map()
+
+  ctx.logger.info('dsh-nudge: plugin active, listeners armed (request-error + status)')
+
+  /**
+   * Deliver one pending poke now: follow up on the agent and clear pending.
+   * The caller guarantees the driver is idle (status listener) or the
+   * fallback timer has fired.
+   */
+  function poke(agent, state) {
+    if (!state.pending) return
+    state.pending = false
+    if (state.timer !== undefined) {
+      clearTimeout(state.timer)
+      state.timer = undefined
+    }
+    ctx.logger.info(`dsh-nudge: poking agent "${agent.id}"`)
+    agent.followup(nudgeMessage(state.text))
+  }
+
+  /** Arm a pending poke with the idle listener and a fallback timer. */
+  function armPoke(agent, state) {
+    state.pending = true
+    state.timer = setTimeout(() => {
+      // Fallback: if the idle transition was not observed in time, poke anyway.
+      poke(agent, state)
+    }, POKE_FALLBACK_MS)
+    // Do not call poke() here: the driver is still converging; the
+    // agent/status listener fires on the idle transition and pokes then.
+  }
 
   const dispose = ctx.on('agent/request-error', async (payload, next) => {
     const { agent, turn, failure, signal } = payload
@@ -88,9 +135,9 @@ export function apply(ctx) {
     const action = await next()
     if (action !== undefined && action.kind === 'retry') return action
 
-    // Nobody retried: the turn is terminal. Nudge — unless we already did for
-    // this turn or the agent has been failing too many times in a row.
-    const state = states.get(agent.id) ?? { turn: undefined, consecutive: 0 }
+    // Nobody retried: the turn is terminal. Decide whether to nudge — the
+    // poke itself is deferred until the driver converges to idle.
+    const state = states.get(agent.id) ?? { turn: undefined, consecutive: 0, pending: false, text: '', timer: undefined }
     if (state.turn === turn) return undefined
     if (state.consecutive >= MAX_CONSECUTIVE_NUDGES) {
       ctx.logger.warn(
@@ -105,20 +152,34 @@ export function apply(ctx) {
       return undefined
     }
 
-    const text = renderPrompt(failure, interrupted, signal?.reason)
-    ctx.logger.info(
-      `dsh-nudge: poking agent "${agent.id}" after ${interrupted ? 'interruption' : 'request failure'} (turn ${turn})`,
-    )
-    agent.followup(nudgeMessage(text))
-
     state.turn = turn
     state.consecutive += 1
+    state.text = renderPrompt(failure, interrupted, signal?.reason)
+    ctx.logger.info(
+      `dsh-nudge: queued poke for agent "${agent.id}" after ${interrupted ? 'interruption' : 'request failure'} (turn ${turn})`,
+    )
     states.set(agent.id, state)
+    armPoke(agent, state)
+
     return undefined
+  })
+
+  // The status listener is the primary delivery mechanism: when the agent
+  // flips to idle and a poke is pending, send the follow-up now.
+  const disposeStatus = ctx.on('agent/status', (payload) => {
+    const { agent, status } = payload
+    if (status !== 'idle') return
+    const state = states.get(agent.id)
+    if (state === undefined || !state.pending) return
+    poke(agent, state)
   })
 
   ctx.effect(() => async () => {
     dispose()
+    disposeStatus()
+    for (const state of states.values()) {
+      if (state.timer !== undefined) clearTimeout(state.timer)
+    }
     states.clear()
-  }, 'dsh-nudge: remove listener and clear nudge state')
+  }, 'dsh-nudge: remove listeners and clear nudge state')
 }
