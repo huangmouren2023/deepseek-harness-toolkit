@@ -14,10 +14,16 @@ tools/
 ├─ stop-web/
 │  ├─ stop-deepseek-harness-web.bat
 │  └─ README.md
-└─ dsh-nudge/
+├─ dsh-nudge/
    ├─ lib/index.js
    ├─ package.json
    ├─ cordis.patch.yml
+   └─ README.md
+└─ dsh-android-shell/
+   ├─ app/
+   ├─ gradle/
+   ├─ docs/screenshots/
+   ├─ gradlew.bat
    └─ README.md
 ```
 
@@ -62,3 +68,17 @@ tools\stop-web\stop-deepseek-harness-web.bat
 它监听 `agent/request-error` waterfall：先放行给下游重试策略，只有终态失败（重试耗尽、无人接管）才接管，用 `agent.followup()` 唤醒模型。用户主动取消和 agent 销毁不戳；同 turn 只戳一次，连续失败上限 3 次。
 
 安装方式见 `tools/dsh-nudge/README.md`（放到 `~/.dsh/dsh-external/` 并在 profile 里 link，或手动建 junction）。
+
+## 第四个工具：DSH Android Shell
+
+`tools/dsh-android-shell/` 是 DeepSeek Harness 的 Android 外壳，把 DSH 的 bootstrap、runtime、核心依赖和 arm64 原生库打进 APK，在手机 App 私有目录中启动本地 DSH 服务，再通过 WebView 使用完整界面。
+
+它重点解决了手机端的几个实际问题：
+
+- 首次启动解包到独立的 `dsh-runtime/`，升级只替换 runtime；
+- 用户工程、配置、会话、日志和第三方插件放在独立的 `dsh-user/`，避免升级误伤用户内容；
+- 手机侧边栏采用覆盖式手势交互，避免窄屏被侧栏挤压；
+- 输入区的回车用于换行，不把普通回车误当成发送；
+- 针对 Android 私有目录不支持 POSIX hard link 的情况，为 DSH 会话持久化增加同目录原子重命名兜底。
+
+完整工程、三张手机截图和构建说明见 [`tools/dsh-android-shell/README.md`](tools/dsh-android-shell/README.md)。

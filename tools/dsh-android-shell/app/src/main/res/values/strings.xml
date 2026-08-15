@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">dsh</string>
+    <string name="error_title">dsh 服务未连接</string>
+    <string name="error_detail_default">无法访问当前端口的 dsh 服务\n\n请返回启动器检查服务状态，或点击重试。</string>
+    <string name="retry">重试</string>
+    <string name="refresh">刷新</string>
+    <string name="back_again_to_exit">再按一次返回键退出</string>
+    <string name="error_http">HTTP %1$d</string>
+    <string name="error_unknown">未知网络错误</string>
+
+    <string name="launcher_subtitle">DeepSeek Harness · Android Shell</string>
+    <string name="launcher_checking">正在检查 dsh 服务…</string>
+    <string name="launcher_checking_detail">正在探测 127.0.0.1:%1$d 端口，请稍候。</string>
+    <string name="launcher_running_title">dsh 服务已就绪</string>
+    <string name="launcher_running_detail">已检测到 dsh web（端口 %1$d），即将自动进入…</string>
+    <string name="launcher_not_running_title">dsh 服务未启动</string>
+    <string name="launcher_not_running_detail">端口 %1$d 当前空闲，正在自动准备内置运行时并启动 dsh…</string>
+    <string name="launcher_conflict_title">端口已被占用</string>
+    <string name="launcher_conflict_detail">端口 %1$d 已被其他程序占用，且不是 dsh 服务。请更换一个空闲端口。</string>
+    <string name="launcher_enter">进入 dsh</string>
+    <string name="launcher_start_dsh">一键启动 dsh</string>
+    <string name="launcher_retry_start">重试启动</string>
+    <string name="launcher_change_port">修改默认端口</string>
+    <string name="launcher_retry_check">重新检测</string>
+    <string name="launcher_start_dsh_anyway">仍要启动 dsh</string>
+    <string name="launcher_port_dialog_title">设置 dsh 默认端口</string>
+    <string name="launcher_port_dialog_message">默认端口为 3080。如果被占用，可以改成 1–65535 之间的其他端口。</string>
+    <string name="launcher_conflict_dialog_title">端口冲突</string>
+    <string name="launcher_conflict_dialog_message">当前端口 %1$d 已被其他程序占用。请输入新的默认端口：</string>
+    <string name="launcher_save_and_retry">保存并重试</string>
+    <string name="launcher_port_invalid">端口无效，请输入 1–65535 之间的数字。</string>
+    <string name="launcher_starting_title">正在启动 dsh…</string>
+    <string name="launcher_starting_detail">正在启动内置 dsh，请稍候。</string>
+    <string name="launcher_preparing_runtime">正在准备内置 Node.js 和 dsh…</string>
+    <string name="launcher_start_ok_detail">启动脚本已执行，正在等待 dsh web 在端口 %1$d 就绪…</string>
+    <string name="launcher_waiting_dsh">dsh 正在启动（第 %1$d 次检查）…</string>
+    <string name="launcher_start_failed_title">启动失败</string>
+    <string name="launcher_start_failed_detail">内置 dsh 启动失败。日志：%1$s</string>
+    <string name="launcher_start_script_error">启动脚本写入失败，请重试或检查存储空间。</string>
+    <string name="launcher_runtime">运行时管理</string>
+    <string name="runtime_dialog_title">DSH 运行时</string>
+    <string name="runtime_manifest_hint">更新清单 URL（可选）</string>
+    <string name="runtime_manifest_default">https://example.invalid/dsh-runtime-manifest.json</string>
+    <string name="runtime_check">检查并更新</string>
+    <string name="runtime_repair">修复内置运行时</string>
+    <string name="runtime_cancel">关闭</string>
+    <string name="runtime_status">内置版本：%1$s&#10;已安装版本：%2$s&#10;配置和工程目录不会被更新覆盖。</string>
+    <string name="runtime_no_update">当前已是清单版本：%1$s</string>
+    <string name="runtime_update_found">发现运行时版本：%1$s，正在下载并校验。</string>
+    <string name="runtime_update_done">运行时更新已完成，下次启动 dsh 生效。</string>
+    <string name="runtime_update_failed">运行时更新失败：%1$s</string>
+    <string name="runtime_repair_done">内置运行时已修复。</string>
+</resources>

@@ -1,0 +1,7 @@
+local.properties
+*.keystore
+*.jks
+build/
+.gradle/
+.playwright-cli/
+
