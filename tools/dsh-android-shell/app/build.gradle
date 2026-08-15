@@ -1,0 +1,71 @@
+plugins {
+    id "com.android.application"
+}
+
+def releaseKeystorePath = providers.gradleProperty("dsh.release.keystore")
+        .orElse(System.getenv("DSH_RELEASE_KEYSTORE") ?: "")
+        .get()
+def releaseStorePassword = providers.gradleProperty("dsh.release.storePassword")
+        .orElse(System.getenv("DSH_RELEASE_STORE_PASSWORD") ?: "")
+        .get()
+def releaseKeyAlias = providers.gradleProperty("dsh.release.keyAlias")
+        .orElse(System.getenv("DSH_RELEASE_KEY_ALIAS") ?: "")
+        .get()
+def releaseKeyPassword = providers.gradleProperty("dsh.release.keyPassword")
+        .orElse(System.getenv("DSH_RELEASE_KEY_PASSWORD") ?: "")
+        .get()
+def hasReleaseSigning = releaseKeystorePath && file(releaseKeystorePath).isFile()
+
+android {
+    namespace "com.dsh.shell"
+    compileSdk 34
+
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging true
+        }
+    }
+
+    defaultConfig {
+        applicationId "com.dsh.shell"
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+
+    signingConfigs {
+        release {
+            if (hasReleaseSigning) {
+                storeFile file(releaseKeystorePath)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            minifyEnabled false
+        }
+        release {
+            minifyEnabled false
+            // Keep the checkout buildable without distributing a private key.
+            // CI/release builds can provide dsh.release.* Gradle properties or
+            // the matching DSH_RELEASE_* environment variables.
+            signingConfig hasReleaseSigning ? signingConfigs.release : signingConfigs.debug
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+}
