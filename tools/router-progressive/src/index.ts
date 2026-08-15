@@ -76,6 +76,13 @@ const MANAGED_TOOLS = new Set([
   ...CAPABILITIES.flatMap(capability => capability.tools),
 ])
 
+const WEB_FETCH_FOLLOW_UP_SENTENCE = 'Follow up with web_fetch when you need the full content of a specific result, and cite the relevant URLs as markdown links.'
+const WEB_FETCH_TOKEN_RE = /\bweb_fetch\b/g
+
+type WebAvailability = {
+  isAvailable: (capability: 'search' | 'fetch') => boolean
+}
+
 const overrides = new Map<string, RouterMode>()
 
 /** Clamp a numeric mode to the supported 0..1 range. */
@@ -164,8 +171,22 @@ function modeFor(agent: Agent): RouterMode {
   return overrides.get(String(agent.session.id)) ?? routeFor(firstUserText(agent.session)).mode
 }
 
-function allowedToolsFor(agent: Agent): ReadonlySet<string> {
-  return progressiveToolsFor(routeFor(firstUserText(agent.session)))
+function allowedToolsFor(agent: Agent, web: WebAvailability | undefined): ReadonlySet<string> {
+  const route = routeFor(firstUserText(agent.session))
+  const allowed = progressiveToolsFor(route) as Set<string>
+  if (web !== undefined && route.capabilities.includes('web')) {
+    if (!web.isAvailable('search')) allowed.delete('web_search')
+    if (!web.isAvailable('fetch')) allowed.delete('web_fetch')
+  }
+  return allowed
+}
+
+/** Keep prompt prose consistent with the final model-visible tool set. */
+function sanitizeUnavailableToolMentions(text: string, allowed: ReadonlySet<string>): string {
+  if (allowed.has('web_fetch')) return text
+  return text
+    .replace(WEB_FETCH_FOLLOW_UP_SENTENCE, 'Use the returned source snippets when available, and cite the relevant URLs as markdown links.')
+    .replace(WEB_FETCH_TOKEN_RE, 'the returned source snippets')
 }
 
 function routeNote(route: RouterDecision, mode: RouterMode): string {
@@ -177,18 +198,18 @@ function routeGuidance(mode: RouterMode): string {
   return '路由提示：先判断这是“直接制作”还是“检查修复”；制作类任务直接落地并验证，修复类任务先检查再修改。'
 }
 
-function routeToolGuard(execution: Readonly<ToolExecution>): string | undefined {
+function routeToolGuard(execution: Readonly<ToolExecution>, web: WebAvailability | undefined): string | undefined {
   if (execution.agent === undefined || !MANAGED_TOOLS.has(execution.name)) return undefined
-  const allowed = allowedToolsFor(execution.agent)
+  const allowed = allowedToolsFor(execution.agent, web)
   return allowed.has(execution.name)
     ? undefined
     : `progressive router：工具“${execution.name}”未被当前首条用户请求选中`
 }
 
-function statusText(agent: Agent): string {
+function statusText(agent: Agent, web: WebAvailability | undefined): string {
   const route = routeFor(firstUserText(agent.session))
   const mode = modeFor(agent)
-  const selected = [...allowedToolsFor(agent)].join(', ')
+  const selected = [...allowedToolsFor(agent, web)].join(', ')
   return [
     `mode=${mode} (band=${bandOf(mode)})`,
     `reason=${route.reason}`,
@@ -201,16 +222,22 @@ function statusText(agent: Agent): string {
 
 /** Install the progressive router in an agent-preset scope. */
 export function apply(ctx: Context): void {
+  const web = ctx.get('web') as WebAvailability | undefined
   ctx.on('system-prompt/assemble', async (_assembly, context, next) => {
     const agent = context.agent
     if (agent === undefined) return next()
     const route = routeFor(firstUserText(agent.session))
     const mode = modeFor(agent)
-    const allowed = allowedToolsFor(agent)
     const transformed = await next()
+    const composedNames = new Set(transformed.tools.map(tool => tool.name))
+    const allowed = new Set([...allowedToolsFor(agent, web)].filter(name => composedNames.has(name)))
     const sections = transformed.sections
       .filter(section => !section.name.startsWith('tool:') || allowed.has(section.name.slice('tool:'.length)))
       .filter(section => section.name !== 'router:route' && section.name !== 'router:guidance')
+      .map(section => ({
+        ...section,
+        text: sanitizeUnavailableToolMentions(section.text, allowed),
+      }))
     sections.push({ name: 'router:route', text: routeNote(route, mode) })
     const guidance = routeGuidance(mode)
     if (guidance !== '') sections.push({ name: 'router:guidance', text: guidance })
@@ -221,7 +248,7 @@ export function apply(ctx: Context): void {
     }
   })
 
-  ctx.tools.guard(routeToolGuard)
+  ctx.tools.guard(execution => routeToolGuard(execution, web))
   ctx.on('session/disposed', session => { overrides.delete(String(session.id)) })
 
   ctx.tools.register(defineTool({
@@ -232,7 +259,7 @@ export function apply(ctx: Context): void {
       schema: { type: 'string' },
       render: (_args, value) => [{ type: 'text', text: value }],
     },
-    execute: async (_args, execution) => execution.agent === undefined ? 'no agent session' : statusText(execution.agent),
+    execute: async (_args, execution) => execution.agent === undefined ? 'no agent session' : statusText(execution.agent, web),
   }))
 
   ctx.tools.register(defineTool({
@@ -259,4 +286,3 @@ export function apply(ctx: Context): void {
 }
 
 export default Object.assign(apply, { inject })
-
