@@ -1,0 +1,5 @@
+# 将这一行放进目标 agent preset 的 agent.cordis.yml。
+# 先运行 install.ps1 把本工具安装到 profile 依赖中。
+- id: router-progressive
+  name: '@dsh-external/dsh-router-progressive'
+

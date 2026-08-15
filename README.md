@@ -25,6 +25,13 @@ tools/
 │  ├─ package.json
 │  ├─ cordis.patch.yml
 │  └─ README.md
+├─ router-progressive/
+│  ├─ lib/index.js
+│  ├─ src/index.ts
+│  ├─ package.json
+│  ├─ preset-row.yml
+│  ├─ install.ps1
+│  └─ README.md
 └─ dsh-android-shell/
    ├─ app/
    ├─ gradle/
@@ -94,3 +101,7 @@ tools\stop-web\stop-deepseek-harness-web.bat
 - 针对 Android 私有目录不支持 POSIX hard link 的情况，为 DSH 会话持久化增加同目录原子重命名兜底。
 
 完整工程、三张手机截图和构建说明见 [`tools/dsh-android-shell/README.md`](tools/dsh-android-shell/README.md)。
+
+## 第六个工具：router-progressive 渐进式工具路由
+
+`tools/router-progressive/` 是基于原作者 dsh-routing-suite 原型继续改造的 DSH agent-preset 插件：按首条直接用户请求选择模型可见工具，并在执行阶段再次拦截未选中的受管工具。它不是全局 host 插件，安装与致谢见 `tools/router-progressive/README.md`。

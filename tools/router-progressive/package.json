@@ -1,0 +1,24 @@
+{
+  "name": "@dsh-external/dsh-router-progressive",
+  "description": "Deterministic progressive tool routing for a DeepSeek Harness agent preset",
+  "version": "0.1.0-local.1",
+  "private": true,
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./invariant": "./lib/invariant.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "README.md",
+    "ATTRIBUTION.md",
+    "package.json"
+  ],
+  "peerDependencies": {
+    "@deepseek-ai/dsh-tools": "*"
+  },
+  "license": "MIT"
+}
+
