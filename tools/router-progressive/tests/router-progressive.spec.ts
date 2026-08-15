@@ -82,5 +82,23 @@ describe('dsh-router-progressive', () => {
     expect(assembly.sections.map(section => section.name)).toContain('tool:web_search')
     expect(assembly.sections.find(section => section.name === 'router:route')?.text).toContain('capabilities=web')
   })
-})
 
+  it('removes unavailable fetch guidance when the final schema does not contain fetch', async () => {
+    const agent = fakeAgent('请搜索最新资料')
+    const ctx = await mount(agent)
+    for (const name of ['read', 'edit', 'write', 'glob', 'grep', 'pwsh', 'web_search']) {
+      ctx.tools.register(tool(name))
+    }
+    ctx.systemPrompt.section({
+      name: 'tool:web_search',
+      order: 10,
+      text: 'Follow up with web_fetch when you need the full content of a specific result, and cite the relevant URLs as markdown links.',
+    })
+
+    const assembly = await ctx.systemPrompt.assemble({ scope: agent, agent })
+    expect(assembly.tools.map(tool => tool.name)).not.toContain('web_fetch')
+    const guidance = assembly.sections.find(section => section.name === 'tool:web_search')?.text ?? ''
+    expect(guidance).toContain('returned source snippets')
+    expect(guidance).not.toContain('web_fetch')
+  })
+})

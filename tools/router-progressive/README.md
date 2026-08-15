@@ -11,6 +11,7 @@
 - 原作者项目：[yjh051108/dsh-routing-suite](https://github.com/yjh051108/dsh-routing-suite)
 - 原作者归属、项目链接和 MIT 许可声明保留在 [ATTRIBUTION.md](ATTRIBUTION.md)。
 - 本工具中的 TypeScript 实现、执行守卫、真实 DSH 时序兼容、中文说明和工具集封装属于本地改造内容。
+- 路由会把最终实际组合出来的工具面与提示词指导再次对齐；当 `web_fetch` provider 不可用时，不再暴露对应 schema，也不会在提示词里继续诱导调用死工具。
 - 本目录不是原作者官方发布，也不代表原作者为本改造背书。
 
 ## 安装
@@ -39,4 +40,3 @@ pnpm vitest run packages/preset/router-progressive/tests/router-progressive.spec
 ```
 
 构建入口已经随本目录保留在 [lib/index.js](lib/index.js)，源码在 [src/index.ts](src/index.ts)。当前本机 DSH 已验证：首条 inbox 消息可被识别，路由原因和能力包可见，工具面在普通文件任务与网页任务之间按预期收敛。
-
