@@ -33,8 +33,18 @@ window.__ModuleLoader__.load({
       return map[stage] ?? { emoji: '❓', color: '#888' }
     }
 
-    /** Render the panel into the given anchor button. */
-    function showPanel(anchor) {
+    /** Toggle the right-edge radar card; create on first open. */
+    function togglePanel() {
+      var existing = document.getElementById('dsh-liang-watch-panel')
+      if (existing) {
+        if (existing.parentNode) existing.parentNode.removeChild(existing)
+        return
+      }
+      showPanel()
+    }
+
+    /** Render the panel as a card docked to the right edge of the window. */
+    function showPanel() {
       var panel = document.createElement('div')
       panel.id = 'dsh-liang-watch-panel'
       panel.style.cssText = [
@@ -45,11 +55,29 @@ window.__ModuleLoader__.load({
         'box-shadow:0 12px 32px rgba(0,0,0,.4)',
         'font-size:13px', 'line-height:1.5',
         'color:var(--dsw-alias-label-primary, #eee)',
+        // Dock to the right edge, vertically centered; independent of the button.
+        'right:16px', 'top:50%', 'transform:translateY(-50%)',
+        'max-height:calc(100vh - 32px)', 'overflow:auto',
       ].join(';')
 
       var header = document.createElement('div')
-      header.textContent = '梁强度雷达'
-      header.style.cssText = 'font-weight:700;font-size:14px;margin-bottom:10px'
+      header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:10px'
+      var title = document.createElement('span')
+      title.textContent = '梁强度雷达'
+      title.style.cssText = 'font-weight:700;font-size:14px'
+      var closeBtn = document.createElement('button')
+      closeBtn.type = 'button'
+      closeBtn.textContent = '✕'
+      closeBtn.title = '关闭'
+      closeBtn.style.cssText = [
+        'border:none', 'background:transparent',
+        'color:var(--dsw-alias-label-caption, #999)',
+        'cursor:pointer', 'font-size:13px', 'padding:2px 6px', 'border-radius:6px',
+      ].join(';')
+      closeBtn.onclick = function () {
+        if (panel.parentNode) panel.parentNode.removeChild(panel)
+      }
+      header.append(title, closeBtn)
       panel.append(header)
 
       var status = document.createElement('div')
@@ -58,15 +86,6 @@ window.__ModuleLoader__.load({
       panel.append(status)
 
       document.body.append(panel)
-      var rect = anchor.getBoundingClientRect()
-      panel.style.left = Math.max(8, rect.left - panel.offsetWidth + rect.width) + 'px'
-      panel.style.top = Math.max(8, rect.top - panel.offsetHeight - 4) + 'px'
-      var close = function (event) {
-        if (panel.contains(event.target)) return
-        document.body.removeChild(panel)
-        document.removeEventListener('mousedown', close, true)
-      }
-      setTimeout(function () { document.addEventListener('mousedown', close, true) }, 0)
 
       // Load score + timeline.
       Promise.all([proxyGet('/score'), proxyGet('/timeline')])
@@ -165,7 +184,7 @@ window.__ModuleLoader__.load({
         'color:var(--dsw-alias-label-primary, inherit)', 'cursor:pointer', 'font:inherit',
       ].join(';')
       button.textContent = wide ? '👑 梁强度' : '👑'
-      button.onclick = function () { showPanel(button) }
+      button.onclick = function () { togglePanel() }
       return button
     }
 
