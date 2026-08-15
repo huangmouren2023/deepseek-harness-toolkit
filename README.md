@@ -11,6 +11,9 @@ tools/
 ├─ restart-web/
 │  ├─ start-deepseek-harness-web.bat
 │  └─ README.md
+├─ stop-web/
+│  ├─ stop-deepseek-harness-web.bat
+│  └─ README.md
 └─ dsh-nudge/
    ├─ lib/index.js
    ├─ package.json
@@ -44,7 +47,15 @@ tools\restart-web\start-deepseek-harness-web.bat
 
 前置条件：Windows、Node.js、pnpm，以及已经构建好的 `apps\web\dist\index.html`。
 
-## 第二个工具：dsh-nudge 插件
+## 第二个工具：Web 关停脚本
+
+`tools/stop-web/stop-deepseek-harness-web.bat` 只结束占用 `127.0.0.1:3080` 的 DSH 实例进程树，释放端口后退出，不会重新启动服务。没有 3080 监听时提示已停止；无法确认监听者属于 Harness 时拒绝结束，避免误杀。
+
+```bat
+tools\stop-web\stop-deepseek-harness-web.bat
+```
+
+## 第三个工具：dsh-nudge 插件
 
 `tools/dsh-nudge/` 是一个 DSH 插件：任务报错或中断时，强制戳 LLM 一下，让模型解释报错、从中断处继续，而不是装死躺平。针对 agent 稳定性的基础设施。
 
