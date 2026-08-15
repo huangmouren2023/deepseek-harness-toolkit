@@ -15,10 +15,16 @@ tools/
 │  ├─ stop-deepseek-harness-web.bat
 │  └─ README.md
 ├─ dsh-nudge/
-   ├─ lib/index.js
-   ├─ package.json
-   ├─ cordis.patch.yml
-   └─ README.md
+│  ├─ lib/index.js
+│  ├─ package.json
+│  ├─ cordis.patch.yml
+│  └─ README.md
+├─ dsh-liang-watch/
+│  ├─ lib/index.js
+│  ├─ lib/client.js
+│  ├─ package.json
+│  ├─ cordis.patch.yml
+│  └─ README.md
 └─ dsh-android-shell/
    ├─ app/
    ├─ gradle/
@@ -69,7 +75,13 @@ tools\stop-web\stop-deepseek-harness-web.bat
 
 安装方式见 `tools/dsh-nudge/README.md`（放到 `~/.dsh/dsh-external/` 并在 profile 里 link，或手动建 junction）。
 
-## 第四个工具：DSH Android Shell
+## 第四个工具：dsh-liang-watch 插件
+
+`tools/dsh-liang-watch/` 是「梁强度雷达」插件：把滑动变祖器（Lichtspektrum/liang-intensity-calibrator）的社区投票/每日时间线接进 DSH。模型端有 `liang_score` / `liang_timeline` / `liang_vote` 三个工具，Web 端侧边栏底部有「👑 梁强度」面板（实时评分 + 快捷投票 + 7 天快照）。host 侧代理转发上游 API 并解决 CORS 与本机直连超时（自动走系统代理）。
+
+已在本机验证：dump-config 组合树正常、代理端点 200、真实投票被上游接受、headless Chrome 实测按钮与面板渲染无报错。安装方式见 `tools/dsh-liang-watch/README.md`。
+
+## 第五个工具：DSH Android Shell
 
 `tools/dsh-android-shell/` 是 DeepSeek Harness 的 Android 外壳，把 DSH 的 bootstrap、runtime、核心依赖和 arm64 原生库打进 APK，在手机 App 私有目录中启动本地 DSH 服务，再通过 WebView 使用完整界面。
 

@@ -1,0 +1,4 @@
+# dsh-liang-watch bundle patch: mounts the plugin into a profile layer stack.
+- insert:
+    - id: liang-watch
+      name: '@dsh-external/dsh-liang-watch'
