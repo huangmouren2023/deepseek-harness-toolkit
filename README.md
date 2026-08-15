@@ -28,7 +28,7 @@ tools/
 1. 定位并检查 DeepSeek Harness 工作区；
 2. 查找占用 `127.0.0.1:3080` 的旧 Harness 实例；
 3. 只在确认进程链属于 Harness 时结束旧进程树；
-4. 等待端口释放后，执行 `pnpm.cmd dsh web` 正常启动。
+4. 等待端口释放后，直接执行 DSH 的 Node 源码入口，避免启动时触发 pnpm 依赖裁剪。
 
 使用示例：
 

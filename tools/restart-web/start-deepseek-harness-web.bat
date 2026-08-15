@@ -1,6 +1,9 @@
 @echo off
 setlocal
 
+rem Prefer the standard Windows Node and user-level pnpm shim when available.
+if exist "%ProgramFiles%\nodejs\node.exe" set "PATH=%ProgramFiles%\nodejs;%USERPROFILE%\.local\bin;%PATH%"
+
 if /i "%~1"=="--help" (
     echo DeepSeek Harness Web restart launcher for Windows.
     echo.
@@ -28,10 +31,10 @@ pushd "%DSH_ROOT%" || (
     exit /b 1
 )
 
-where pnpm.cmd >nul 2>&1
+where node.exe >nul 2>&1
 if errorlevel 1 (
-    echo pnpm was not found in PATH.
-    echo Open a new PowerShell window once, then try this file again.
+    echo Node.js was not found in PATH.
+    echo Install Node.js 22.19 or newer, then try this file again.
     popd
     pause
     exit /b 1
@@ -62,7 +65,7 @@ echo Starting DeepSeek Harness Web...
 echo Keep this window open while using the Web UI.
 echo.
 
-call pnpm.cmd dsh web
+node.exe --import tsx/esm apps/cli/src/bin.ts web
 
 set "EXIT_CODE=%ERRORLEVEL%"
 popd

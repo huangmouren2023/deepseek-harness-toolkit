@@ -28,6 +28,7 @@ tools\restart-web\start-deepseek-harness-web.bat
 - 查找监听 `127.0.0.1:3080` 的进程；
 - 通过父进程链确认它属于 Harness；
 - 使用 `taskkill /T /F` 结束旧实例的完整进程树；
-- 等待 3080 释放后执行 `pnpm.cmd dsh web`。
+- 等待 3080 释放后直接执行 `node.exe --import tsx/esm apps/cli/src/bin.ts web`；
+- 不在启动阶段调用 pnpm，避免 production 依赖裁剪触发开发工具缺失。
 
 如果 3080 被无法确认身份的程序占用，脚本会拒绝结束它并退出，避免误杀其他服务。
