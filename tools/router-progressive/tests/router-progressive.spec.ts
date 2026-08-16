@@ -83,6 +83,19 @@ describe('dsh-router-progressive', () => {
     expect(assembly.sections.find(section => section.name === 'router:route')?.text).toContain('capabilities=web')
   })
 
+  it('replaces the Standard persona with the current-model identity anchor', async () => {
+    const agent = fakeAgent('请修复这个报错')
+    const ctx = await mount(agent)
+    ctx.tools.register(tool('read'))
+
+    const assembly = await ctx.systemPrompt.assemble({ scope: agent, agent })
+    const persona = assembly.sections.find(section => section.name === 'deployment:persona')?.text ?? ''
+    expect(persona).toContain('You are a helpful software engineer assistant.')
+    expect(persona).toContain('You are currently the {{model}} model.')
+    expect(persona).toContain('You operate within DeepSeek Harness.')
+    expect(persona).not.toContain('You are a coding agent powered by')
+  })
+
   it('removes unavailable fetch guidance when the final schema does not contain fetch', async () => {
     const agent = fakeAgent('请搜索最新资料')
     const ctx = await mount(agent)

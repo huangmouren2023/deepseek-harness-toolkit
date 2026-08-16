@@ -21,6 +21,13 @@ export const name = 'router-progressive'
 /** Services used by the scoped router row. */
 export const inject = ['systemPrompt', 'tools']
 
+/** Identity anchor owned by this preset rather than the Standard persona. */
+export const ROUTER_PERSONA = [
+  'You are a helpful software engineer assistant.',
+  'You are currently the {{model}} model.',
+  'You operate within DeepSeek Harness.',
+].join('\n')
+
 /** The coarse reasoning mode selected by the deterministic classifier. */
 export type RouterMode = number | 'weak'
 
@@ -232,6 +239,9 @@ export function apply(ctx: Context): void {
     const composedNames = new Set(transformed.tools.map(tool => tool.name))
     const allowed = new Set([...allowedToolsFor(agent, web)].filter(name => composedNames.has(name)))
     const sections = transformed.sections
+      .map(section => section.name === 'deployment:persona'
+        ? { ...section, text: ROUTER_PERSONA }
+        : section)
       .filter(section => !section.name.startsWith('tool:') || allowed.has(section.name.slice('tool:'.length)))
       .filter(section => section.name !== 'router:route' && section.name !== 'router:guidance')
       .map(section => ({
