@@ -1,6 +1,11 @@
 import { defineTool } from "@deepseek-ai/dsh-tools";
 const name = "router-progressive";
 const inject = ["systemPrompt", "tools"];
+const ROUTER_PERSONA = [
+  "You are a helpful software engineer assistant.",
+  "You are currently the {{model}} model.",
+  "You operate within DeepSeek Harness."
+].join("\n");
 const REACT_RE = /(开发|创建|写一个|生成|从零|做一个|网站|网页|构建|新项目|实现|做出|上线|落地|脚本|应用|build|create|develop|generate|implement|make a|new project)/i;
 const SPEC_RE = /(修复|修一个|调试|重构|维护|排查|报错|出错|崩溃|优化|审查|review|fix|debug|refactor|maintain|repair|broken|迁移|升级|兼容)/i;
 const CORE_TOOLS = [
@@ -146,7 +151,7 @@ function apply(ctx) {
     const transformed = await next();
     const composedNames = new Set(transformed.tools.map((tool) => tool.name));
     const allowed = new Set([...allowedToolsFor(agent, web)].filter((name2) => composedNames.has(name2)));
-    const sections = transformed.sections.filter((section) => !section.name.startsWith("tool:") || allowed.has(section.name.slice("tool:".length))).filter((section) => section.name !== "router:route" && section.name !== "router:guidance").map((section) => ({
+    const sections = transformed.sections.map((section) => section.name === "deployment:persona" ? { ...section, text: ROUTER_PERSONA } : section).filter((section) => !section.name.startsWith("tool:") || allowed.has(section.name.slice("tool:".length))).filter((section) => section.name !== "router:route" && section.name !== "router:guidance").map((section) => ({
       ...section,
       text: sanitizeUnavailableToolMentions(section.text, allowed)
     }));
@@ -198,6 +203,7 @@ function apply(ctx) {
 var index_default = Object.assign(apply, { inject });
 export {
   CORE_TOOLS,
+  ROUTER_PERSONA,
   apply,
   bandOf,
   clampMode,
