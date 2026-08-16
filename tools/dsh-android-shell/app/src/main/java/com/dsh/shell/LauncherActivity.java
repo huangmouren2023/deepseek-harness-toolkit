@@ -295,10 +295,10 @@ public class LauncherActivity extends Activity {
         intro.setTextSize(13);
         box.addView(intro);
 
-        Switch permission = addCapabilitySwitch(box, R.string.capability_permission, R.string.capability_proot_detail, current.permissionPrompts);
-        Switch sandbox = addCapabilitySwitch(box, R.string.capability_sandbox, R.string.capability_proot_detail, current.sandbox);
-        Switch bashSandbox = addCapabilitySwitch(box, R.string.capability_bash_sandbox, R.string.capability_proot_detail, current.bashSandbox);
-        Switch rootShell = addCapabilitySwitch(box, R.string.capability_root, R.string.capability_root_detail, current.rootShell);
+        Switch fullAccess = addCapabilitySwitch(box, R.string.capability_full_access,
+                R.string.capability_full_access_detail, current.fullAccess);
+        Switch rootShell = addCapabilitySwitch(box, R.string.capability_root,
+                R.string.capability_root_detail, current.rootShell);
 
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle(R.string.capabilities_title)
@@ -307,10 +307,8 @@ public class LauncherActivity extends Activity {
                 .setPositiveButton(R.string.capabilities_save, null)
                 .create();
         dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
-            boolean useSandbox = sandbox.isChecked() || bashSandbox.isChecked() || permission.isChecked();
-            boolean useBashSandbox = bashSandbox.isChecked() || permission.isChecked();
             DshCapabilities.Settings settings = new DshCapabilities.Settings(
-                    permission.isChecked(), useSandbox, useBashSandbox, rootShell.isChecked());
+                    fullAccess.isChecked(), fullAccess.isChecked() && rootShell.isChecked());
             if (settings.rootShell && !DshCapabilities.rootAvailable()) {
                 rootShell.setChecked(false);
                 Toast.makeText(this, R.string.capability_root_unavailable, Toast.LENGTH_LONG).show();

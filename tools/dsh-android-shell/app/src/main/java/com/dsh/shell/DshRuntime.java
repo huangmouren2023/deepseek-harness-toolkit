@@ -33,7 +33,7 @@ public final class DshRuntime {
     private static final String PROOT_ASSET = "android-tools/proot";
     private static final String PROOT_WRAPPER_ASSET = "android-tools/bwrap-proot.sh";
     private static final String ROOT_TOOLS_DIR = "/data/adb/dsh";
-    private static final String RUNTIME_VERSION = "dsh-0.1.0-rc.5-node24-arm64-22-android-tools5-router4";
+    private static final String RUNTIME_VERSION = "dsh-0.1.0-rc.5-node24-arm64-22-android-tools5-router5-identity-first-search-shell-web-cn-permission-labels";
 
     private static Process process;
     private static int processPort = -1;
@@ -293,13 +293,14 @@ public final class DshRuntime {
         File projects = projectsDir(context);
         File plugins = pluginsDir(context);
         File log = logFile(context);
-        DshCapabilities.Settings storedCapabilities = DshCapabilities.load(context);
-        DshCapabilities.Settings capabilities = storedCapabilities;
-        boolean needsCompatibility = capabilities.sandbox
-                || capabilities.bashSandbox
-                || capabilities.permissionPrompts;
-        boolean rootAvailable = capabilities.rootShell && DshCapabilities.rootAvailable();
-        if (capabilities.rootShell && !rootAvailable) {
+        DshCapabilities.Settings capabilities = DshCapabilities.load(context);
+        // Full access is deliberately a simple product-level choice. The
+        // restricted path keeps the Android compatibility sandbox; the full
+        // path disables approval/sandbox layers so tools can actually work.
+        boolean needsCompatibility = !capabilities.fullAccess;
+        boolean rootRequested = capabilities.fullAccess && capabilities.rootShell;
+        boolean rootAvailable = rootRequested && DshCapabilities.rootAvailable();
+        if (rootRequested && !rootAvailable) {
             throw new IOException("未检测到可用的 Root su，请在能力配置中关闭 Root Shell");
         }
         if (rootAvailable && needsCompatibility) {
@@ -320,6 +321,15 @@ public final class DshRuntime {
         File logParent = log.getParentFile();
         if (logParent != null && !logParent.exists() && !logParent.mkdirs()) {
             throw new IOException("无法创建 dsh 日志目录");
+        }
+
+        String nodeLibraryDir = SOURCE_BUNDLED.equals(source)
+                ? context.getApplicationInfo().nativeLibraryDir
+                : new File(root, "node/lib").getAbsolutePath();
+        boolean rootRuntimeAvailable = rootAvailable && canRunNodeAsRoot(node, nodeLibraryDir, log);
+        if (rootAvailable && !rootRuntimeAvailable) {
+            appendText(log, "\n[android] Root can run shell commands but cannot execute the app-private Node runtime; "
+                    + "starting DSH as the app and keeping Root for Bash only.\n");
         }
 
                 // Android ships the browser/chat surface without the desktop-only
@@ -349,9 +359,11 @@ public final class DshRuntime {
                         }
                     }
                 }
-                boolean sandboxEnabled = capabilities.sandbox && prootAvailable;
-                boolean bashSandboxEnabled = capabilities.bashSandbox && prootAvailable;
-                boolean permissionEnabled = capabilities.permissionPrompts && prootAvailable;
+                boolean sandboxEnabled = !capabilities.fullAccess && prootAvailable;
+                boolean bashSandboxEnabled = !capabilities.fullAccess && prootAvailable;
+                // Fine-grained approval is intentionally deferred. Restricted
+                // mode denies wider operations instead of asking mid-task.
+                boolean permissionEnabled = false;
                 writeText(androidPatch,
                 // Ordinary child-process execution remains the Android shell
                         // foundation; only the desktop confinement/PTY layers stay off.
@@ -370,8 +382,26 @@ public final class DshRuntime {
                         : "")
                         + "- id: bash-sandbox\n"
                         + "  disabled: " + (!bashSandboxEnabled) + "\n"
+                        + "- id: sandbox-policy\n"
+                        // Keep the policy service mounted: fs-sandbox and tool-fs
+                        // depend on it even when the selected mode is unrestricted.
+                        + "  disabled: false\n"
+                        + (capabilities.fullAccess
+                        ? "  config:\n    mode: danger-full-access\n"
+                        : "")
+                        + "- id: approval\n"
+                        // Keep the approval service mounted for the tool graph,
+                        // but make full-access launches deterministic and quiet.
+                        + "  disabled: false\n"
+                        + (capabilities.fullAccess
+                        ? "  config:\n    policy: never\n"
+                        : "")
                         + "- id: permission\n"
                         + "  disabled: " + (!permissionEnabled) + "\n"
+                        + "- id: fs-sandbox\n"
+                        // This is the file provider used by tool-fs. Full access
+                        // means danger-full-access policy, not removing the provider.
+                        + "  disabled: false\n"
                         + "- id: tool-bash\n"
                         + "  disabled: false\n"
                         + (!bashSandboxEnabled
@@ -380,10 +410,39 @@ public final class DshRuntime {
                                 + "      name: '@deepseek-ai/dsh-bash-local'\n"
                         : ""));
 
-        ProcessBuilder builder = new ProcessBuilder(
-                node.getAbsolutePath(), entry.getAbsolutePath(),
-                "--profile", "web", "--patch", androidPatch.getAbsolutePath(),
-                "--host", "127.0.0.1", "--port", String.valueOf(port));
+        File nodeRoot = new File(root, "node");
+        String nodePath = node.getAbsolutePath();
+        String entryPath = entry.getAbsolutePath();
+        ProcessBuilder builder;
+        if (rootRuntimeAvailable) {
+            // Run the whole DSH runtime as the granted Root identity. The
+            // shell uses exec so stopping the Java-side process also reaches
+            // Node instead of leaving a detached child behind.
+            String path = new File(nodeRoot, "bin").getAbsolutePath()
+                    + ":/system/bin:/system/xbin";
+            String libraries = SOURCE_BUNDLED.equals(source)
+                    ? context.getApplicationInfo().nativeLibraryDir
+                    : new File(nodeRoot, "lib").getAbsolutePath();
+            String command = "cd " + shellQuote(home.getAbsolutePath()) + " &&"
+                    + " HOME=" + shellQuote(userRoot.getAbsolutePath())
+                    + " DSH_HOME=" + shellQuote(home.getAbsolutePath())
+                    + " DSH_CWD=" + shellQuote(projects.getAbsolutePath())
+                    + " DSH_ANDROID=1 DSH_ROOT=1"
+                    + " TMPDIR=" + shellQuote(context.getCacheDir().getAbsolutePath())
+                    + " PREFIX=" + shellQuote(nodeRoot.getAbsolutePath())
+                    + " PATH=" + shellQuote(path)
+                    + " LD_LIBRARY_PATH=" + shellQuote(libraries)
+                    + " DSH_TELEMETRY_DISABLED=1 exec "
+                    + shellQuote(nodePath) + " " + shellQuote(entryPath)
+                    + " --profile web --patch " + shellQuote(androidPatch.getAbsolutePath())
+                    + " --host 127.0.0.1 --port " + shellQuote(String.valueOf(port));
+            builder = new ProcessBuilder("su", "-c", command);
+        } else {
+            builder = new ProcessBuilder(
+                    nodePath, entryPath,
+                    "--profile", "web", "--patch", androidPatch.getAbsolutePath(),
+                    "--host", "127.0.0.1", "--port", String.valueOf(port));
+        }
         Map<String, String> env = builder.environment();
         env.put("HOME", userRoot.getAbsolutePath());
         env.put("DSH_HOME", home.getAbsolutePath());
@@ -393,15 +452,14 @@ public final class DshRuntime {
         // immutable installation anchor instead; user/plugin data stays in
         // its independent directories above.
         env.put("DSH_ANDROID", "1");
-        env.put("DSH_ROOT", capabilities.rootShell ? "1" : "0");
+        env.put("DSH_ROOT", rootAvailable ? "1" : "0");
         env.put("TMPDIR", context.getCacheDir().getAbsolutePath());
-        if (!capabilities.rootShell) {
+        if (!rootAvailable) {
             env.put("PROOT_TMP_DIR", context.getCacheDir().getAbsolutePath());
             env.put("PROOT_LOADER", new File(
                     context.getApplicationInfo().nativeLibraryDir,
                     "libdshproot-loader.so").getAbsolutePath());
         }
-        File nodeRoot = new File(root, "node");
         env.put("PREFIX", nodeRoot.getAbsolutePath());
         env.put("PATH", new File(nodeRoot, "bin").getAbsolutePath() + ":/system/bin:/system/xbin");
         env.put("LD_LIBRARY_PATH", SOURCE_BUNDLED.equals(source)
@@ -414,6 +472,27 @@ public final class DshRuntime {
         process = builder.start();
         processPort = port;
         return process;
+    }
+
+    private static String shellQuote(String value) {
+        return "'" + value.replace("'", "'\\''") + "'";
+    }
+
+    private static boolean canRunNodeAsRoot(File node, String nodeLibraryDir, File log) {
+        String command = "LD_LIBRARY_PATH=" + shellQuote(nodeLibraryDir)
+                + " " + shellQuote(node.getAbsolutePath()) + " --version";
+        Process probe = null;
+        try {
+            probe = new ProcessBuilder("su", "-c", command)
+                    .redirectErrorStream(true)
+                    .redirectOutput(ProcessBuilder.Redirect.appendTo(log))
+                    .start();
+            return probe.waitFor(4, TimeUnit.SECONDS) && probe.exitValue() == 0;
+        } catch (Exception ignored) {
+            return false;
+        } finally {
+            if (probe != null) probe.destroy();
+        }
     }
 
     private static void installRootTools(Context context) throws IOException {
