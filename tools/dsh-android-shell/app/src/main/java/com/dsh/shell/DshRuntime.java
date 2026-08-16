@@ -30,7 +30,7 @@ public final class DshRuntime {
     private static final String SOURCE_BUNDLED = "bundled";
     private static final String SOURCE_NETWORK = "network";
     private static final String BUNDLED_NATIVE_NODE = "libdshnode.so";
-    private static final String RUNTIME_VERSION = "dsh-0.1.0-rc.5-node24-arm64-22";
+    private static final String RUNTIME_VERSION = "dsh-0.1.0-rc.5-node24-arm64-22-android-tools5";
 
     private static Process process;
     private static int processPort = -1;
