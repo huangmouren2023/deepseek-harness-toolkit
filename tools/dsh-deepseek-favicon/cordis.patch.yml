@@ -1,4 +1,0 @@
-# dsh-deepseek-favicon bundle patch: mounts the plugin into a profile layer stack.
-- insert:
-    - id: deepseek-favicon
-      name: '@dsh-external/dsh-deepseek-favicon'
