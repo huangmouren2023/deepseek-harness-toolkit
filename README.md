@@ -25,6 +25,12 @@ tools/
 │  ├─ package.json
 │  ├─ cordis.patch.yml
 │  └─ README.md
+├─ dsh-deepseek-favicon/
+│  ├─ lib/index.js
+│  ├─ lib/client.js
+│  ├─ package.json
+│  ├─ cordis.patch.yml
+│  └─ README.md
 ├─ router-progressive/
 │  ├─ lib/index.js
 │  ├─ src/index.ts
