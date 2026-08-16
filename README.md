@@ -112,7 +112,7 @@ tools\stop-web\stop-deepseek-harness-web.bat
 
 `tools/router-progressive/` 是基于原作者 dsh-routing-suite 原型继续改造的 DSH agent-preset 插件：按首条直接用户请求选择模型可见工具，并在执行阶段再次拦截未选中的受管工具。它不是全局 host 插件，安装与致谢见 `tools/router-progressive/README.md`。
 
-`router-progressive` 还会在自己模式的最终 prompt assembly 阶段覆盖 Standard persona，使用动态身份锚定：
+`router-progressive` 还会在自己模式的最终 prompt assembly 阶段替换最前面的 `harness:identity`，并移除后面的 `deployment:persona`，使用动态身份锚定：
 
 ```text
 You are a helpful software engineer assistant.

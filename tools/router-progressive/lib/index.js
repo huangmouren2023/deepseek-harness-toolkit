@@ -1,14 +1,15 @@
+// src/index.ts
 import { defineTool } from "@deepseek-ai/dsh-tools";
-const name = "router-progressive";
-const inject = ["systemPrompt", "tools"];
-const ROUTER_PERSONA = [
+var name = "router-progressive";
+var inject = ["systemPrompt", "tools"];
+var ROUTER_PERSONA = [
   "You are a helpful software engineer assistant.",
   "You are currently the {{model}} model.",
   "You operate within DeepSeek Harness."
 ].join("\n");
-const REACT_RE = /(开发|创建|写一个|生成|从零|做一个|网站|网页|构建|新项目|实现|做出|上线|落地|脚本|应用|build|create|develop|generate|implement|make a|new project)/i;
-const SPEC_RE = /(修复|修一个|调试|重构|维护|排查|报错|出错|崩溃|优化|审查|review|fix|debug|refactor|maintain|repair|broken|迁移|升级|兼容)/i;
-const CORE_TOOLS = [
+var REACT_RE = /(开发|创建|写一个|生成|从零|做一个|网站|网页|构建|新项目|实现|做出|上线|落地|脚本|应用|build|create|develop|generate|implement|make a|new project)/i;
+var SPEC_RE = /(修复|修一个|调试|重构|维护|排查|报错|出错|崩溃|优化|审查|review|fix|debug|refactor|maintain|repair|broken|迁移|升级|兼容)/i;
+var CORE_TOOLS = [
   "read",
   "edit",
   "write",
@@ -18,7 +19,7 @@ const CORE_TOOLS = [
   "dev_router_status",
   "dev_router_mode"
 ];
-const CAPABILITIES = [
+var CAPABILITIES = [
   { id: "web", test: /(今天|最新|价格|网页|网址|搜索|浏览|新闻|http:\/\/|https:\/\/|web|search)/i, tools: ["web_search", "web_fetch"], label: "\u547D\u4E2D\uFF1A\u7F51\u9875\u3001\u641C\u7D22\u6216\u6700\u65B0\u4FE1\u606F" },
   { id: "jobs", test: /(后台运行|长时间任务|持续执行|稍后读取|background|long-running|job|定时)/i, tools: ["job_output", "job_list", "job_kill"], label: "\u547D\u4E2D\uFF1A\u540E\u53F0\u6216\u957F\u65F6\u95F4\u4EFB\u52A1" },
   { id: "skills", test: /(技能|能力包|说明|skill)/i, tools: ["skill"], label: "\u547D\u4E2D\uFF1Askill \u6216\u80FD\u529B\u5305" },
@@ -29,13 +30,13 @@ const CAPABILITIES = [
   { id: "interaction", test: /(先问我|需要我选择|确认选项|ask_user)/i, tools: ["ask_user_question"], label: "\u547D\u4E2D\uFF1A\u7528\u6237\u9009\u62E9\u6216\u786E\u8BA4" },
   { id: "todo", test: /(待办|任务清单|todo)/i, tools: ["todo_write"], label: "\u547D\u4E2D\uFF1A\u5F85\u529E\u6216 todo" }
 ];
-const MANAGED_TOOLS = /* @__PURE__ */ new Set([
+var MANAGED_TOOLS = /* @__PURE__ */ new Set([
   ...CORE_TOOLS,
   ...CAPABILITIES.flatMap((capability) => capability.tools)
 ]);
-const WEB_FETCH_FOLLOW_UP_SENTENCE = "Follow up with web_fetch when you need the full content of a specific result, and cite the relevant URLs as markdown links.";
-const WEB_FETCH_TOKEN_RE = /\bweb_fetch\b/g;
-const overrides = /* @__PURE__ */ new Map();
+var WEB_FETCH_FOLLOW_UP_SENTENCE = "Follow up with web_fetch when you need the full content of a specific result, and cite the relevant URLs as markdown links.";
+var WEB_FETCH_TOKEN_RE = /\bweb_fetch\b/g;
+var overrides = /* @__PURE__ */ new Map();
 function clampMode(value) {
   return Math.min(1, Math.max(0, value));
 }
@@ -151,7 +152,7 @@ function apply(ctx) {
     const transformed = await next();
     const composedNames = new Set(transformed.tools.map((tool) => tool.name));
     const allowed = new Set([...allowedToolsFor(agent, web)].filter((name2) => composedNames.has(name2)));
-    const sections = transformed.sections.map((section) => section.name === "deployment:persona" ? { ...section, text: ROUTER_PERSONA } : section).filter((section) => !section.name.startsWith("tool:") || allowed.has(section.name.slice("tool:".length))).filter((section) => section.name !== "router:route" && section.name !== "router:guidance").map((section) => ({
+    const sections = transformed.sections.map((section) => section.name === "harness:identity" ? { ...section, text: ROUTER_PERSONA } : section).filter((section) => section.name !== "deployment:persona").filter((section) => !section.name.startsWith("tool:") || allowed.has(section.name.slice("tool:".length))).filter((section) => section.name !== "router:route" && section.name !== "router:guidance").map((section) => ({
       ...section,
       text: sanitizeUnavailableToolMentions(section.text, allowed)
     }));
