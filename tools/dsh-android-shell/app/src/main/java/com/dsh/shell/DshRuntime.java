@@ -30,10 +30,14 @@ public final class DshRuntime {
     private static final String SOURCE_BUNDLED = "bundled";
     private static final String SOURCE_NETWORK = "network";
     private static final String BUNDLED_NATIVE_NODE = "libdshnode.so";
-    private static final String RUNTIME_VERSION = "dsh-0.1.0-rc.5-node24-arm64-22-android-tools5";
+    private static final String PROOT_ASSET = "android-tools/proot";
+    private static final String PROOT_WRAPPER_ASSET = "android-tools/bwrap-proot.sh";
+    private static final String ROOT_TOOLS_DIR = "/data/adb/dsh";
+    private static final String RUNTIME_VERSION = "dsh-0.1.0-rc.5-node24-arm64-22-android-tools5-router4";
 
     private static Process process;
     private static int processPort = -1;
+    private static volatile boolean compatibilityFallback;
 
     private DshRuntime() {
     }
@@ -70,6 +74,10 @@ public final class DshRuntime {
 
     public static File logFile(Context context) {
         return new File(new File(userRoot(context), "logs"), "dsh.log");
+    }
+
+    public static boolean isCompatibilityFallback() {
+        return compatibilityFallback;
     }
 
     public static synchronized boolean isInstalled(Context context) {
@@ -270,6 +278,7 @@ public final class DshRuntime {
             return process;
         }
         stop();
+        compatibilityFallback = false;
 
         File root = installDir(context);
         String source = readVersion(new File(root, SOURCE_FILE_NAME));
@@ -278,11 +287,24 @@ public final class DshRuntime {
                 : new File(root, "node/bin/node");
         File entry = new File(root, "dsh/lib/bin.js");
         if (!node.isFile()) throw new IOException("dsh_node_executable_missing");
+        patchAndroidRuntime(root);
         File userRoot = userRoot(context);
         File home = homeDir(context);
         File projects = projectsDir(context);
         File plugins = pluginsDir(context);
         File log = logFile(context);
+        DshCapabilities.Settings storedCapabilities = DshCapabilities.load(context);
+        DshCapabilities.Settings capabilities = storedCapabilities;
+        boolean needsCompatibility = capabilities.sandbox
+                || capabilities.bashSandbox
+                || capabilities.permissionPrompts;
+        boolean rootAvailable = capabilities.rootShell && DshCapabilities.rootAvailable();
+        if (capabilities.rootShell && !rootAvailable) {
+            throw new IOException("未检测到可用的 Root su，请在能力配置中关闭 Root Shell");
+        }
+        if (rootAvailable && needsCompatibility) {
+            installRootTools(context);
+        }
         if (!userRoot.exists() && !userRoot.mkdirs()) {
             throw new IOException("无法创建 dsh 用户数据目录");
         }
@@ -303,7 +325,33 @@ public final class DshRuntime {
                 // Android ships the browser/chat surface without the desktop-only
                 // sandbox and PTY backends. Keep this overlay separate from user
                 // patches so upgrades never rewrite user configuration.
-                File androidPatch = new File(home, "android-runtime.cordis.patch.yml");
+        File androidPatch = new File(home, "android-runtime.cordis.patch.yml");
+                boolean needsProot = needsCompatibility;
+                String prootRunner = new File(
+                        context.getApplicationInfo().nativeLibraryDir,
+                        "libdshproot.so").getAbsolutePath();
+                String prootLoader = new File(
+                        context.getApplicationInfo().nativeLibraryDir,
+                        "libdshproot-loader.so").getAbsolutePath();
+                boolean useRootRunner = rootAvailable && needsProot;
+                boolean prootAvailable = !needsProot || useRootRunner;
+                if (!useRootRunner && needsProot) {
+                    try {
+                        verifyProotRunner(prootRunner, prootLoader, log, context.getCacheDir());
+                        prootAvailable = true;
+                    } catch (IOException error) {
+                        compatibilityFallback = true;
+                        try {
+                            appendText(log, "\n[android] PRoot unavailable; falling back to unconfined /system/bin/sh: "
+                                    + error.getMessage() + "\n");
+                        } catch (IOException ignored) {
+                            // The fallback must not depend on diagnostic-log availability.
+                        }
+                    }
+                }
+                boolean sandboxEnabled = capabilities.sandbox && prootAvailable;
+                boolean bashSandboxEnabled = capabilities.bashSandbox && prootAvailable;
+                boolean permissionEnabled = capabilities.permissionPrompts && prootAvailable;
                 writeText(androidPatch,
                 // Ordinary child-process execution remains the Android shell
                         // foundation; only the desktop confinement/PTY layers stay off.
@@ -312,16 +360,25 @@ public final class DshRuntime {
                         + "- id: subprocess\n"
                         + "  disabled: false\n"
                         + "- id: sandbox\n"
-                        + "  disabled: true\n"
+                        + "  disabled: " + (!sandboxEnabled) + "\n"
+                        + (sandboxEnabled
+                        ? "  config:\n    runnerCommand: "
+                                + (useRootRunner
+                                ? "['/system/bin/su', '-c', '/data/adb/dsh/bwrap-proot.sh']"
+                                : "['" + prootRunner + "']")
+                                + "\n    runnerFailureSignatures: ['permission denied', 'not found', 'proot', 'bwrap-proot']\n"
+                        : "")
                         + "- id: bash-sandbox\n"
-                        + "  disabled: true\n"
+                        + "  disabled: " + (!bashSandboxEnabled) + "\n"
                         + "- id: permission\n"
-                        + "  disabled: true\n"
+                        + "  disabled: " + (!permissionEnabled) + "\n"
                         + "- id: tool-bash\n"
                         + "  disabled: false\n"
-                        + "- insert:\n"
-                        + "    - id: android-bash-local\n"
-                        + "      name: '@deepseek-ai/dsh-bash-local'\n");
+                        + (!bashSandboxEnabled
+                        ? "- insert:\n"
+                                + "    - id: android-bash-local\n"
+                                + "      name: '@deepseek-ai/dsh-bash-local'\n"
+                        : ""));
 
         ProcessBuilder builder = new ProcessBuilder(
                 node.getAbsolutePath(), entry.getAbsolutePath(),
@@ -336,7 +393,14 @@ public final class DshRuntime {
         // immutable installation anchor instead; user/plugin data stays in
         // its independent directories above.
         env.put("DSH_ANDROID", "1");
+        env.put("DSH_ROOT", capabilities.rootShell ? "1" : "0");
         env.put("TMPDIR", context.getCacheDir().getAbsolutePath());
+        if (!capabilities.rootShell) {
+            env.put("PROOT_TMP_DIR", context.getCacheDir().getAbsolutePath());
+            env.put("PROOT_LOADER", new File(
+                    context.getApplicationInfo().nativeLibraryDir,
+                    "libdshproot-loader.so").getAbsolutePath());
+        }
         File nodeRoot = new File(root, "node");
         env.put("PREFIX", nodeRoot.getAbsolutePath());
         env.put("PATH", new File(nodeRoot, "bin").getAbsolutePath() + ":/system/bin:/system/xbin");
@@ -350,6 +414,162 @@ public final class DshRuntime {
         process = builder.start();
         processPort = port;
         return process;
+    }
+
+    private static void installRootTools(Context context) throws IOException {
+        File proot = new File(context.getCacheDir(), "dsh-proot");
+        File wrapper = new File(context.getCacheDir(), "dsh-bwrap-proot.sh");
+        copyAsset(context, PROOT_ASSET, proot);
+        copyAsset(context, PROOT_WRAPPER_ASSET, wrapper);
+        String command = "mkdir -p " + ROOT_TOOLS_DIR
+                + " && cp " + proot.getAbsolutePath() + " " + ROOT_TOOLS_DIR + "/proot"
+                + " && cp " + wrapper.getAbsolutePath() + " " + ROOT_TOOLS_DIR + "/bwrap-proot.sh"
+                + " && chmod 755 " + ROOT_TOOLS_DIR + "/proot " + ROOT_TOOLS_DIR + "/bwrap-proot.sh";
+        Process process = new ProcessBuilder("su", "-c", command).redirectErrorStream(true).start();
+        try {
+            if (!process.waitFor(10, TimeUnit.SECONDS) || process.exitValue() != 0) {
+                throw new IOException("root_tool_install_failed");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("root_tool_install_interrupted", e);
+        }
+    }
+
+    /** Confirm that the APK-native PRoot binary is executable in the app domain. */
+    private static void verifyProotRunner(String runner, String loader, File log, File tempDir)
+            throws IOException {
+        ProcessBuilder builder = new ProcessBuilder(
+                runner, "-0", "-r", "/", "/system/bin/echo", "dsh-proot-preflight")
+                .redirectErrorStream(true)
+                .redirectOutput(ProcessBuilder.Redirect.appendTo(log));
+        builder.environment().put("PROOT_TMP_DIR", tempDir.getAbsolutePath());
+        builder.environment().put("PROOT_LOADER", loader);
+        Process process = builder.start();
+        try {
+            if (!process.waitFor(8, TimeUnit.SECONDS) || process.exitValue() != 0) {
+                process.destroyForcibly();
+                throw new IOException("proot_runner_preflight_failed");
+            }
+        } catch (InterruptedException e) {
+            process.destroyForcibly();
+            Thread.currentThread().interrupt();
+            throw new IOException("proot_runner_preflight_interrupted", e);
+        }
+    }
+
+    /**
+     * The Android bundle never uses the Windows ACL runner, but the published
+     * sandbox-local module imports that desktop package statically. Replace
+     * that unused surface with an Android-only stub after extraction so Koffi
+     * is not loaded merely while composing the Android PRoot runner.
+     */
+    private static void patchAndroidRuntime(File root) throws IOException {
+        patchAgentPresetResolution(root);
+
+        File aclEntry = new File(root,
+                "dsh/node_modules/@deepseek-ai/dsh-sandbox-windows-acl/lib/index.js");
+        if (aclEntry.isFile()) writeText(aclEntry,
+                "// Android runtime stub: Windows ACL is not used by the Android runner.\n"
+                        + "class AndroidUnsupportedAclError extends Error {\n"
+                        + "  constructor() {\n"
+                        + "    super('Windows ACL sandbox is not available in the Android runtime');\n"
+                        + "    this.name = 'AndroidUnsupportedAclError';\n"
+                        + "  }\n"
+                        + "}\n"
+                        + "class AclWriteGrant {\n"
+                        + "  static create() { throw new AndroidUnsupportedAclError(); }\n"
+                        + "}\n"
+                        + "class AclSandbox {\n"
+                        + "  constructor() { throw new AndroidUnsupportedAclError(); }\n"
+                        + "}\n"
+                        + "class Win32Error extends AndroidUnsupportedAclError {}\n"
+                        + "function unsupportedPath() { throw new AndroidUnsupportedAclError(); }\n"
+                        + "const quoteArg = unsupportedPath;\n"
+                        + "const assertTempRootOutsideWorkspace = unsupportedPath;\n"
+                        + "const tempWriteSid = unsupportedPath;\n"
+                        + "const workspaceWriteSid = unsupportedPath;\n"
+                        + "export { AclSandbox, AclWriteGrant, AndroidUnsupportedAclError, Win32Error, "
+                        + "assertTempRootOutsideWorkspace, quoteArg, tempWriteSid, workspaceWriteSid };\n");
+
+        // sandbox-local imports the Windows package statically. Patch that
+        // import too, so a runtime shipped with a different package export
+        // shape cannot pull the desktop Koffi module into Android.
+        File sandboxEntry = new File(root,
+                "dsh/node_modules/@deepseek-ai/dsh-sandbox-local/lib/index.js");
+        if (sandboxEntry.isFile()) {
+            String source = readText(sandboxEntry);
+            String desktopImport = "import { AclWriteGrant, assertTempRootOutsideWorkspace, tempWriteSid, workspaceWriteSid } from \"@deepseek-ai/dsh-sandbox-windows-acl\";\n";
+            String androidImports = "const AndroidUnsupportedAclError = class extends Error { constructor() { super('Windows ACL sandbox is not available in the Android runtime'); } };\n"
+                    + "const AclWriteGrant = { create() { throw new AndroidUnsupportedAclError(); } };\n"
+                    + "const assertTempRootOutsideWorkspace = () => { throw new AndroidUnsupportedAclError(); };\n"
+                    + "const tempWriteSid = () => { throw new AndroidUnsupportedAclError(); };\n"
+                    + "const workspaceWriteSid = () => { throw new AndroidUnsupportedAclError(); };\n";
+            if (source.contains(desktopImport)) writeText(sandboxEntry, source.replace(desktopImport, androidImports));
+        }
+
+        File koffiEntry = new File(root, "dsh/node_modules/koffi/src/koffi/index.js");
+        if (koffiEntry.isFile()) writeText(koffiEntry,
+                "// Android runtime stub: desktop Win32 FFI is unavailable and unused.\n"
+                        + "const unavailable = () => { throw new Error('Koffi desktop FFI is unavailable in the Android runtime'); };\n"
+                        + "const koffi = { pointer: () => ({}), struct: () => ({ size: 0, alignment: 1 }), "
+                        + "proto: unavailable, register: unavailable, unregister: unavailable, alloc: unavailable, "
+                        + "encode: unavailable, decode: unavailable, address: unavailable, view: unavailable, "
+                        + "load: unavailable, sizeof: () => 0, alignof: () => 1 };\n"
+                        + "export default koffi;\n");
+    }
+
+    /**
+     * Older embedded/network runtimes omit Loader internals on Android. Their
+     * agent-preset fallback asks native import to resolve bare package names
+     * beside a writable profile whose runtime-package links cannot be read
+     * under Android SELinux. Resolve the APK's shipped packages from the real
+     * runtime first, then retain the profile fallback for genuine extensions.
+     * The embedded progressive-router preset therefore remains independent of
+     * any manually installed copy in dsh-user.
+     */
+    private static void patchAgentPresetResolution(File root) throws IOException {
+        File presetEntry = new File(root,
+                "dsh/node_modules/@deepseek-ai/dsh-agent-presets/lib/index.js");
+        if (!presetEntry.isFile()) return;
+        String source = readText(presetEntry);
+        String oldFallback = "if (internal === void 0) return super.import(specifier, getOuterStack);";
+        String profileOnlyFallback = "if (internal === void 0) {\n"
+                + "\t\t\tconst hostRequire = createRequire(base);\n"
+                + "\t\t\treturn super.import(pathToFileURL(hostRequire.resolve(specifier)).href, getOuterStack);\n"
+                + "\t\t}";
+        if (!source.contains(oldFallback) && !source.contains(profileOnlyFallback)) return;
+
+        String urlImport = "import { pathToFileURL } from \"node:url\";";
+        if (!source.contains(urlImport)) {
+            throw new IOException("agent_preset_url_import_missing");
+        }
+        String moduleImport = "import { createRequire } from \"node:module\";\n";
+        if (!source.contains(moduleImport.trim())) {
+            source = source.replace(urlImport, moduleImport + urlImport);
+        }
+        String resolvedFallback = "if (internal === void 0) {\n"
+                + "\t\t\tlet resolved;\n"
+                + "\t\t\ttry {\n"
+                + "\t\t\t\tresolved = createRequire(import.meta.url).resolve(specifier);\n"
+                + "\t\t\t} catch {\n"
+                + "\t\t\t\tresolved = createRequire(base).resolve(specifier);\n"
+                + "\t\t\t}\n"
+                + "\t\t\treturn super.import(pathToFileURL(resolved).href, getOuterStack);\n"
+                + "\t\t}";
+        String patched = source.contains(oldFallback)
+                ? source.replace(oldFallback, resolvedFallback)
+                : source.replace(profileOnlyFallback, resolvedFallback);
+        writeText(presetEntry, patched);
+    }
+
+    private static void copyAsset(Context context, String assetName, File target) throws IOException {
+        try (InputStream input = context.getAssets().open(assetName);
+             BufferedOutputStream output = new BufferedOutputStream(new FileOutputStream(target))) {
+            byte[] buffer = new byte[32 * 1024];
+            int n;
+            while ((n = input.read(buffer)) != -1) output.write(buffer, 0, n);
+        }
     }
 
     public static synchronized boolean isRunning() {
@@ -399,6 +619,24 @@ public final class DshRuntime {
     private static void writeText(File file, String text) throws IOException {
         try (FileOutputStream out = new FileOutputStream(file)) {
             out.write(text.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        }
+    }
+
+    private static void appendText(File file, String text) throws IOException {
+        try (FileOutputStream out = new FileOutputStream(file, true)) {
+            out.write(text.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        }
+    }
+
+    private static String readText(File file) throws IOException {
+        try (FileInputStream input = new FileInputStream(file)) {
+            byte[] bytes = new byte[(int) Math.min(file.length(), Integer.MAX_VALUE)];
+            int offset = 0;
+            int n;
+            while (offset < bytes.length && (n = input.read(bytes, offset, bytes.length - offset)) != -1) {
+                offset += n;
+            }
+            return new String(bytes, 0, offset, java.nio.charset.StandardCharsets.UTF_8);
         }
     }
 

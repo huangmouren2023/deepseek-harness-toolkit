@@ -123,5 +123,16 @@
             android:text="@string/launcher_runtime"
             android:textColor="@color/text_secondary"
             android:textSize="13sp" />
+
+        <Button
+            android:id="@+id/btn_capabilities"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:background="@android:color/transparent"
+            android:minWidth="120dp"
+            android:text="@string/launcher_capabilities"
+            android:textColor="@color/text_secondary"
+            android:textSize="13sp" />
     </LinearLayout>
 </ScrollView>

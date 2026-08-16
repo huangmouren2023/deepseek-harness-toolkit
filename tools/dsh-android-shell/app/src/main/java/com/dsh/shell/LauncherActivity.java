@@ -14,8 +14,11 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
+import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import java.io.IOException;
 
 public class LauncherActivity extends Activity {
 
@@ -43,6 +46,7 @@ public class LauncherActivity extends Activity {
     private Button secondaryButton;
     private Button retryButton;
     private Button runtimeButton;
+    private Button capabilitiesButton;
 
     private final Runnable autoEnterRunnable = new Runnable() {
         @Override
@@ -67,6 +71,7 @@ public class LauncherActivity extends Activity {
         secondaryButton = findViewById(R.id.btn_secondary);
         retryButton = findViewById(R.id.btn_retry);
         runtimeButton = findViewById(R.id.btn_runtime);
+        capabilitiesButton = findViewById(R.id.btn_capabilities);
 
         primaryButton.setOnClickListener(v -> onPrimaryClick());
         secondaryButton.setOnClickListener(v -> showPortDialog());
@@ -75,6 +80,7 @@ public class LauncherActivity extends Activity {
             startCheck();
         });
         runtimeButton.setOnClickListener(v -> showRuntimeDialog());
+        capabilitiesButton.setOnClickListener(v -> showCapabilitiesDialog());
 
         startCheck();
     }
@@ -276,6 +282,105 @@ public class LauncherActivity extends Activity {
         dialog.show();
     }
 
+    private void showCapabilitiesDialog() {
+        DshCapabilities.Settings current = DshCapabilities.load(this);
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        int pad = (int) (getResources().getDisplayMetrics().density * 24);
+        box.setPadding(pad, 0, pad, 0);
+
+        TextView intro = new TextView(this);
+        intro.setText(R.string.capabilities_intro);
+        intro.setTextColor(getResources().getColor(R.color.text_secondary));
+        intro.setTextSize(13);
+        box.addView(intro);
+
+        Switch permission = addCapabilitySwitch(box, R.string.capability_permission, R.string.capability_proot_detail, current.permissionPrompts);
+        Switch sandbox = addCapabilitySwitch(box, R.string.capability_sandbox, R.string.capability_proot_detail, current.sandbox);
+        Switch bashSandbox = addCapabilitySwitch(box, R.string.capability_bash_sandbox, R.string.capability_proot_detail, current.bashSandbox);
+        Switch rootShell = addCapabilitySwitch(box, R.string.capability_root, R.string.capability_root_detail, current.rootShell);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle(R.string.capabilities_title)
+                .setView(box)
+                .setNegativeButton(R.string.runtime_cancel, null)
+                .setPositiveButton(R.string.capabilities_save, null)
+                .create();
+        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            boolean useSandbox = sandbox.isChecked() || bashSandbox.isChecked() || permission.isChecked();
+            boolean useBashSandbox = bashSandbox.isChecked() || permission.isChecked();
+            DshCapabilities.Settings settings = new DshCapabilities.Settings(
+                    permission.isChecked(), useSandbox, useBashSandbox, rootShell.isChecked());
+            if (settings.rootShell && !DshCapabilities.rootAvailable()) {
+                rootShell.setChecked(false);
+                Toast.makeText(this, R.string.capability_root_unavailable, Toast.LENGTH_LONG).show();
+                return;
+            }
+            try {
+                DshCapabilities.save(this, settings);
+                dialog.dismiss();
+                Toast.makeText(this, R.string.capabilities_saved, Toast.LENGTH_LONG).show();
+            } catch (IOException e) {
+                Toast.makeText(this, getString(R.string.capabilities_save_failed, readableError(e)), Toast.LENGTH_LONG).show();
+            }
+        }));
+        dialog.show();
+    }
+
+    private Switch addCapabilitySwitch(LinearLayout parent, int titleRes, int detailRes, boolean checked) {
+        Switch control = new Switch(this);
+        control.setText(titleRes);
+        control.setTextColor(getResources().getColor(R.color.text_primary));
+        control.setTextSize(15);
+        control.setPadding(0, 18, 0, 2);
+        control.setChecked(checked);
+        control.setOnClickListener(v -> {
+            if (!control.isChecked()) return;
+            boolean root = titleRes == R.string.capability_root;
+            String message = getString(root ? R.string.capability_root_warning : R.string.capability_warning);
+            new AlertDialog.Builder(this)
+                    .setTitle(R.string.capability_warning_title)
+                    .setMessage(message)
+                    .setNegativeButton(android.R.string.cancel, (dialog, which) -> control.setChecked(false))
+                    .setPositiveButton(R.string.capability_enable, (dialog, which) -> {
+                        if (root) showRootAuthorizationConfirmation(control);
+                    })
+                    .setOnCancelListener(dialog -> control.setChecked(false))
+                    .show();
+        });
+        parent.addView(control);
+
+        TextView detail = new TextView(this);
+        detail.setText(detailRes);
+        detail.setTextColor(getResources().getColor(R.color.text_secondary));
+        detail.setTextSize(12);
+        detail.setPadding(0, 0, 0, 8);
+        parent.addView(detail);
+        return control;
+    }
+
+    private void showRootAuthorizationConfirmation(Switch control) {
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.capability_root_confirm_title)
+                .setMessage(R.string.capability_root_confirm_message)
+                .setNegativeButton(android.R.string.cancel, (dialog, which) -> control.setChecked(false))
+                .setPositiveButton(R.string.capability_root_confirm, (dialog, which) -> {
+                    control.setEnabled(false);
+                    new Thread(() -> {
+                        boolean available = DshCapabilities.rootAvailable();
+                        runOnUiThread(() -> {
+                            control.setEnabled(true);
+                            if (!available) {
+                                control.setChecked(false);
+                                Toast.makeText(this, R.string.capability_root_unavailable, Toast.LENGTH_LONG).show();
+                            }
+                        });
+                    }).start();
+                })
+                .setOnCancelListener(dialog -> control.setChecked(false))
+                .show();
+    }
+
     private void repairBundledRuntime() {
         progress.setIndeterminate(false);
         progress.setVisibility(View.VISIBLE);
@@ -354,6 +459,12 @@ public class LauncherActivity extends Activity {
                 }));
                 runOnUiThread(() -> statusDetail.setText(getString(R.string.launcher_start_ok_detail, port)));
                 DshRuntime.start(this, port);
+                if (DshRuntime.isCompatibilityFallback()) {
+                    runOnUiThread(() -> Toast.makeText(
+                            this,
+                            R.string.capability_proot_fallback_warning,
+                            Toast.LENGTH_LONG).show());
+                }
                 runOnUiThread(() -> waitForDsh(0));
             } catch (Exception e) {
                 String reason = e.getMessage() == null ? e.toString() : e.getMessage();

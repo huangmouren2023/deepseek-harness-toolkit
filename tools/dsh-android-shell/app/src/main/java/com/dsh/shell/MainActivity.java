@@ -39,6 +39,7 @@ public class MainActivity extends Activity {
     private TextView errorDetail;
 
     private boolean doubleBackToExitPressed = false;
+    private boolean backDispatchPending = false;
     private boolean mainFrameError = false;
     private final Handler handler = new Handler(Looper.getMainLooper());
 
@@ -246,6 +247,27 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        if (webView != null && webView.getVisibility() == View.VISIBLE
+                && !mainFrameError && !backDispatchPending) {
+            backDispatchPending = true;
+            String dismissModal = "(function(){"
+                    + "var d=document.querySelector('[role=dialog][aria-modal=true]');"
+                    + "if(!d)return false;"
+                    + "document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',code:'Escape',bubbles:true,cancelable:true}));"
+                    + "return true;"
+                    + "})();";
+            webView.evaluateJavascript(dismissModal, handled -> {
+                backDispatchPending = false;
+                if (!"true".equals(handled)) handleHistoryOrExit();
+            });
+            return;
+        }
+        if (backDispatchPending) return;
+        handleHistoryOrExit();
+    }
+
+    /** Continue native back navigation only when the page had no open modal. */
+    private void handleHistoryOrExit() {
         if (webView.canGoBack()) {
             webView.goBack();
             return;
