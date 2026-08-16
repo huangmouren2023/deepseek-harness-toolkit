@@ -94,13 +94,7 @@ tools\stop-web\stop-deepseek-harness-web.bat
 
 已在本机验证：dump-config 组合树正常、代理端点 200、真实投票被上游接受、headless Chrome 实测按钮与面板渲染无报错。安装方式见 `tools/dsh-liang-watch/README.md`。
 
-## 第五个工具：dsh-deepseek-favicon 插件
-
-`tools/dsh-deepseek-favicon/` 把 DSH 的标签页图标换成 DeepSeek 官方鲸鱼 logo。纯 client 端：logo 以 base64 data URI 内嵌在 client.js 里，替换 `link[rel="icon"]`，零 host 依赖、不碰源码。默认的鲸鱼娘头像在深色标签页下黑乎乎一片，官方 logo 清晰醒目。
-
-已在本机验证：headless Chrome 实测 link href 变更为 data URI，16×16 标签页图标清晰可辨。安装方式见 `tools/dsh-deepseek-favicon/README.md`。
-
-## 第六个工具：DSH Android Shell
+## 第五个工具：DSH Android Shell
 
 `tools/dsh-android-shell/` 是 DeepSeek Harness 的 Android 外壳，把 DSH 的 bootstrap、runtime、核心依赖和 arm64 原生库打进 APK，在手机 App 私有目录中启动本地 DSH 服务，再通过 WebView 使用完整界面。
 
