@@ -12,7 +12,7 @@
 - 原作者归属、项目链接和 MIT 许可声明保留在 [ATTRIBUTION.md](ATTRIBUTION.md)。
 - 本工具中的 TypeScript 实现、执行守卫、真实 DSH 时序兼容、中文说明和工具集封装属于本地改造内容。
 - 路由会把最终实际组合出来的工具面与提示词指导再次对齐；当 `web_fetch` provider 不可用时，不再暴露对应 schema，也不会在提示词里继续诱导调用死工具。
-- 在最终 prompt assembly 阶段，本模式会覆盖 Standard persona，使用动态身份锚定：
+- 在最终 prompt assembly 阶段，本模式会先替换最前面的 `harness:identity`，再移除后面的 `deployment:persona`，使用动态身份锚定：
 
   ```text
   You are a helpful software engineer assistant.
