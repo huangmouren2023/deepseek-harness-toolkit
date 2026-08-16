@@ -17,6 +17,9 @@ import java.util.concurrent.TimeUnit;
 public final class DshCapabilities {
 
     private static final String FILE_NAME = "android-capabilities.properties";
+    private static final String KEY_FULL_ACCESS = "full_access";
+    // Keep reading the old keys so an existing installation gets a sensible
+    // migration instead of silently losing its previous capability choice.
     private static final String KEY_PERMISSION_PROMPTS = "permission_prompts";
     private static final String KEY_SANDBOX = "sandbox";
     private static final String KEY_BASH_SANDBOX = "bash_sandbox";
@@ -26,15 +29,11 @@ public final class DshCapabilities {
     }
 
     public static final class Settings {
-        public final boolean permissionPrompts;
-        public final boolean sandbox;
-        public final boolean bashSandbox;
+        public final boolean fullAccess;
         public final boolean rootShell;
 
-        public Settings(boolean permissionPrompts, boolean sandbox, boolean bashSandbox, boolean rootShell) {
-            this.permissionPrompts = permissionPrompts;
-            this.sandbox = sandbox;
-            this.bashSandbox = bashSandbox;
+        public Settings(boolean fullAccess, boolean rootShell) {
+            this.fullAccess = fullAccess;
             this.rootShell = rootShell;
         }
     }
@@ -50,26 +49,12 @@ public final class DshCapabilities {
                 // A damaged optional settings file falls back to the safe defaults.
             }
         }
-        return new Settings(
-                getBoolean(properties, KEY_PERMISSION_PROMPTS),
-                getBoolean(properties, KEY_SANDBOX),
-                getBoolean(properties, KEY_BASH_SANDBOX),
-                getBoolean(properties, KEY_ROOT_SHELL));
-    }
-
-    /**
-     * The public Android runtime currently has no compatible desktop sandbox
-     * runner. Permission presets require that runner, so accepting these flags
-     * would make DSH fail during composition rather than merely disabling one
-     * tool. Keep the persisted root choice, but normalize the unsupported
-     * desktop-only flags before every launch.
-     */
-    public static Settings androidCompatible(Settings settings) {
-        return new Settings(false, false, false, settings.rootShell);
-    }
-
-    public static boolean hasUnsupportedAndroidFlags(Settings settings) {
-        return settings.permissionPrompts || settings.sandbox || settings.bashSandbox;
+        boolean fullAccess = properties.containsKey(KEY_FULL_ACCESS)
+                ? getBoolean(properties, KEY_FULL_ACCESS)
+                : getBoolean(properties, KEY_PERMISSION_PROMPTS)
+                        || getBoolean(properties, KEY_SANDBOX)
+                        || getBoolean(properties, KEY_BASH_SANDBOX);
+        return new Settings(fullAccess, getBoolean(properties, KEY_ROOT_SHELL));
     }
 
     public static void save(Context context, Settings settings) throws IOException {
@@ -78,9 +63,7 @@ public final class DshCapabilities {
             throw new IOException("无法创建 DSH 配置目录");
         }
         Properties properties = new Properties();
-        properties.setProperty(KEY_PERMISSION_PROMPTS, Boolean.toString(settings.permissionPrompts));
-        properties.setProperty(KEY_SANDBOX, Boolean.toString(settings.sandbox));
-        properties.setProperty(KEY_BASH_SANDBOX, Boolean.toString(settings.bashSandbox));
+        properties.setProperty(KEY_FULL_ACCESS, Boolean.toString(settings.fullAccess));
         properties.setProperty(KEY_ROOT_SHELL, Boolean.toString(settings.rootShell));
         File file = settingsFile(context);
         try (FileOutputStream output = new FileOutputStream(file);
