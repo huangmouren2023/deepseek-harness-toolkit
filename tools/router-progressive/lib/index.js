@@ -152,7 +152,7 @@ function apply(ctx) {
     const transformed = await next();
     const composedNames = new Set(transformed.tools.map((tool) => tool.name));
     const allowed = new Set([...allowedToolsFor(agent, web)].filter((name2) => composedNames.has(name2)));
-    const sections = transformed.sections.map((section) => section.name === "harness:identity" ? { ...section, text: ROUTER_PERSONA } : section).filter((section) => section.name !== "deployment:persona").filter((section) => !section.name.startsWith("tool:") || allowed.has(section.name.slice("tool:".length))).filter((section) => section.name !== "router:route" && section.name !== "router:guidance").map((section) => ({
+    const sections = transformed.sections.filter((section) => section.name !== "harness:identity").map((section) => section.name === "deployment:persona" ? { ...section, text: ROUTER_PERSONA } : section).filter((section) => !section.name.startsWith("tool:") || allowed.has(section.name.slice("tool:".length))).filter((section) => section.name !== "router:route" && section.name !== "router:guidance").map((section) => ({
       ...section,
       text: sanitizeUnavailableToolMentions(section.text, allowed)
     }));

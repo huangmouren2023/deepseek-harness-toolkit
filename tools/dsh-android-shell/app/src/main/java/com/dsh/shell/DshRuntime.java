@@ -33,7 +33,7 @@ public final class DshRuntime {
     private static final String PROOT_ASSET = "android-tools/proot";
     private static final String PROOT_WRAPPER_ASSET = "android-tools/bwrap-proot.sh";
     private static final String ROOT_TOOLS_DIR = "/data/adb/dsh";
-    private static final String RUNTIME_VERSION = "dsh-0.1.0-rc.5-node24-arm64-22-android-tools5-router4";
+    private static final String RUNTIME_VERSION = "dsh-0.1.0-rc.5-node24-arm64-22-android-tools5-router5";
 
     private static Process process;
     private static int processPort = -1;

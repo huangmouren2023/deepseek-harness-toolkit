@@ -1,6 +1,6 @@
 # DSH Android Shell
 
-当前发布版本：`1.0.2`（`versionCode 3`）。版本变更见 [CHANGELOG.md](CHANGELOG.md)。
+当前发布版本：`1.0.3`（`versionCode 4`）。版本变更见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 本次能力配置与渐进式路由
 

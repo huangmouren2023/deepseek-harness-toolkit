@@ -1,5 +1,12 @@
 # 变更日志
 
+## 1.0.3 - 2026-08-17
+
+### Fix
+
+- The progressive router now removes the deployment-level Harness opener so its complete system prompt starts with `You are a helpful software engineer assistant.`.
+- The `{{model}}` template remains dynamically rendered and the router remains mutually exclusive with the four official Agent modes.
+
 ## 1.0.2 - 2026-08-16
 
 ### 修复

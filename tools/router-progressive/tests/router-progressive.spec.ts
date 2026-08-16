@@ -83,17 +83,17 @@ describe('dsh-router-progressive', () => {
     expect(assembly.sections.find(section => section.name === 'router:route')?.text).toContain('capabilities=web')
   })
 
-  it('replaces the first identity section and removes the later Standard persona', async () => {
+  it('removes the Harness opener and makes the router persona first', async () => {
     const agent = fakeAgent('请修复这个报错')
     const ctx = await mount(agent)
     ctx.tools.register(tool('read'))
 
     const assembly = await ctx.systemPrompt.assemble({ scope: agent, agent })
-    const identity = assembly.sections.find(section => section.name === 'harness:identity')?.text ?? ''
-    expect(assembly.sections[0]?.name).toBe('harness:identity')
-    expect(identity).toBe(Router.ROUTER_PERSONA)
-    expect(identity).toContain('You are currently the {{model}} model.')
-    expect(assembly.sections.map(section => section.name)).not.toContain('deployment:persona')
+    const persona = assembly.sections.find(section => section.name === 'deployment:persona')?.text ?? ''
+    expect(assembly.sections[0]?.name).toBe('deployment:persona')
+    expect(assembly.sections.map(section => section.name)).not.toContain('harness:identity')
+    expect(persona).toBe(Router.ROUTER_PERSONA)
+    expect(persona).toContain('You are currently the {{model}} model.')
   })
 
   it('removes unavailable fetch guidance when the final schema does not contain fetch', async () => {

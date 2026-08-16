@@ -239,12 +239,12 @@ export function apply(ctx: Context): void {
     const composedNames = new Set(transformed.tools.map(tool => tool.name))
     const allowed = new Set([...allowedToolsFor(agent, web)].filter(name => composedNames.has(name)))
     const sections = transformed.sections
-      // Replace the first/global identity anchor, then remove the later
-      // Standard persona so two competing identity blocks cannot remain.
-      .map(section => section.name === 'harness:identity'
+      // The router owns the complete model identity. Remove the deployment
+      // opener, then replace the Standard persona with the router anchor.
+      .filter(section => section.name !== 'harness:identity')
+      .map(section => section.name === 'deployment:persona'
         ? { ...section, text: ROUTER_PERSONA }
         : section)
-      .filter(section => section.name !== 'deployment:persona')
       .filter(section => !section.name.startsWith('tool:') || allowed.has(section.name.slice('tool:'.length)))
       .filter(section => section.name !== 'router:route' && section.name !== 'router:guidance')
       .map(section => ({
